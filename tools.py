@@ -13,6 +13,7 @@ Tools:
 """
 
 import os
+import re
 
 from dotenv import load_dotenv
 from groq import Groq
@@ -33,6 +34,8 @@ def _get_groq_client():
         )
     return Groq(api_key=api_key)
 
+client = _get_groq_client()
+
 
 # ── Tool 1: search_listings ───────────────────────────────────────────────────
 
@@ -42,31 +45,34 @@ def search_listings(
     max_price: float | None = None,
 ) -> list[dict]:
     listings = load_listings()
-
+    
     query_words = set(re.findall(r"\w+", description.lower()))
     scored = []
 
     for listing in listings:
         # Price filter
-        if max_price is not None and listing["price"] > max_price:
+        if max_price is not None and (listing.get("price") or 0) > max_price:
             continue
 
         # Size filter
         if size is not None:
-            if size.lower() not in listing["size"].lower():
+            listing_size = listing.get("size")
+            if not listing_size or size.lower() not in listing_size.lower():
                 continue
 
-        # Build searchable text
-        searchable = " ".join([
-            listing.get("title", ""),
-            listing.get("description", ""),
-            listing.get("category", ""),
-            " ".join(listing.get("style_tags", [])),
-            listing.get("brand", "")
-        ]).lower()
+        # Build searchable text - Fixed to handle NoneType values
+        searchable_parts = [
+            listing.get("title") or "",
+            listing.get("description") or "",
+            listing.get("category") or "",
+            " ".join(listing.get("style_tags") or []),
+            listing.get("brand") or ""
+        ]
+        
+        # Ensure every part is a string
+        searchable = " ".join(str(part) for part in searchable_parts).lower()
 
         listing_words = set(re.findall(r"\w+", searchable))
-
         score = len(query_words & listing_words)
 
         if score > 0:
@@ -115,12 +121,22 @@ Mention wardrobe items by name.
 Keep the response under 200 words.
 """
 
-    response = client.responses.create(
-        model="gpt-4.1-mini",
-        input=prompt,
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a helpful fashion stylist."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        temperature=0.7,
     )
 
-    return response.output_text.strip()
+    return response.choices[0].message.content.strip()
 
 
 # ── Tool 3: create_fit_card ───────────────────────────────────────────────────
@@ -144,10 +160,19 @@ Requirements:
 Do not use hashtags.
 """
 
-    response = client.responses.create(
-        model="gpt-4.1-mini",
-        input=prompt,
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {
+                "role": "system",
+                "content": "You write short, engaging social media captions."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
         temperature=1.0,
     )
 
-    return response.output_text.strip()
+    return response.choices[0].message.content.strip()

@@ -22,16 +22,27 @@ def test_search_listings_no_results():
 def test_suggest_outfit_empty_wardrobe(monkeypatch):
     """Should still return styling advice if wardrobe is empty."""
 
+    class FakeMessage:
+        content = "Pair it with relaxed jeans and white sneakers."
+
+    class FakeChoice:
+        message = FakeMessage()
+
     class FakeResponse:
-        output_text = "Pair it with relaxed jeans and white sneakers."
+        choices = [FakeChoice()]
+
+    class FakeCompletions:
+        @staticmethod
+        def create(*args, **kwargs):
+            return FakeResponse()
+
+    class FakeChat:
+        completions = FakeCompletions()
 
     class FakeClient:
-        class responses:
-            @staticmethod
-            def create(*args, **kwargs):
-                return FakeResponse()
+        chat = FakeChat()
 
-    # Replace your global OpenAI client with a fake one
+    # Replace the global Groq client with a fake one
     monkeypatch.setattr("tools.client", FakeClient())
 
     new_item = {
